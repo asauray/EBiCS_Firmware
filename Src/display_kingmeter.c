@@ -133,7 +133,6 @@ uint8_t wheel_magnets = 1;
 uint8_t vcutoff = 30;
 //uint16_t wheel_circumference = 2200;
 uint8_t spd_max1 = 25;
-uint8_t spd_max2 = 40;
 uint8_t ui8_RxLength=1;
 
 
@@ -188,7 +187,7 @@ void KingMeter_Init (KINGMETER_t* KM_ctx)
     KM_ctx->Rx.Throttle                     = KM_THROTTLE_ON;
     KM_ctx->Rx.CruiseControl                = KM_CRUISE_OFF;
     KM_ctx->Rx.OverSpeed                    = KM_OVERSPEED_NO;
-    KM_ctx->Rx.SPEEDMAX_Limit           	= (uint16_t) (spd_max1 * 10);
+    KM_ctx->Rx.SPEEDMAX_Limit              = (uint16_t) (spd_max1 * 10);
     KM_ctx->Rx.CUR_Limit_mA                = 150;
 
     // Parameters to be send to display in operation mode:
