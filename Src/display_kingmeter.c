@@ -170,6 +170,9 @@ void KingMeter_Init (KINGMETER_t* KM_ctx)
     KM_ctx->Settings.VOL_1_UnderVolt_x10    = (uint16_t) (vcutoff * 10);
     KM_ctx->Settings.WheelSize_mm           = (uint16_t) (WHEEL_CIRCUMFERENCE * 1000);
 
+    // default briddle is off
+    KM_ctx->Rx.Briddle                      = KM_BRIDDLE_OFF;
+
     // Parameters received from display in operation mode:
 
 #if (DISPLAY_TYPE == DISPLAY_TYPE_KINGMETER_618U)
@@ -419,9 +422,17 @@ static void KM_901U_Service(KINGMETER_t* KM_ctx)
 								
                                 if (KM_ctx->Rx.PushAssist)
 								{
-                                    KM_ctx->Rx.SPEEDMAX_Limit = KM_ctx->Rx.SPEEDMAX_Limit == SPEEDLIMIT ? BRIDLED_SPEEDLIMIT : SPEEDLIMIT;
+                                    KM_ctx->Rx.Briddle = KM_ctx->Rx.Briddle  == KM_BRIDDLE_ON ? KM_BRIDDLE_OFF: KM_BRIDDLE_ON;
                                 }
+                                if(KM_ctx->Rx.Briddle== KM_BRIDDLE_ON) 
+                                {
+                                    KM_ctx->Rx.SPEEDMAX_Limit = BRIDLED_SPEEDLIMIT; ;
    			            		}
+                                else 
+                                {
+                                    KM_ctx->Rx.SPEEDMAX_Limit = SPEEDLIMIT;
+                                }
+                                }
     			            	else {// printf_("Checksum fail! \n ");
 
 
