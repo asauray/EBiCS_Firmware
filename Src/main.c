@@ -882,7 +882,10 @@ int main(void)
 
 #else //else NTCE
 				// read in throttle for throttle override
-				uint16_mapped_throttle = map(ui16_throttle, ui16_throttle_offset, THROTTLE_MAX, 0,PH_CURRENT_MAX);
+                // if not briddled, use throttle override
+                if(KM.Rx.SPEEDMAX_Limit == SPEEDLIMIT) {
+				    uint16_mapped_throttle = map(ui16_throttle, ui16_throttle_offset, THROTTLE_MAX, 0,PH_CURRENT_MAX);
+                }
 
 #endif //end NTCE
 
@@ -958,6 +961,19 @@ int main(void)
 			//			else int32_temp_current_target=int32_temp_current_target;
 
 #endif //legalflag
+
+// implement briddle
+if(KM.Rx.Briddle == KM_BRIDDLE_ON) {
+    if(!brake_flag){ //only ramp down if no regen active
+        if(uint32_PAS_counter<PAS_TIMEOUT){
+            int32_temp_current_target=map(uint32_SPEEDx100_cumulated>>SPEEDFILTER, MP.speedLimit*100,(MP.speedLimit+2)*100,int32_temp_current_target,0);
+        }
+        else{ //limit to 6km/h if pedals are not turning
+            int32_temp_current_target=map(uint32_SPEEDx100_cumulated>>SPEEDFILTER, 500,700,int32_temp_current_target,0);
+        }
+    }
+    //			else int32_temp_current_target=int32_temp_current_target;
+}
 
 #if (DISPLAY_TYPE & DISPLAY_TYPE_KINGMETER || DISPLAY_TYPE & DISPLAY_TYPE_DEBUG)
 			if(KM.DirectSetpoint!=-1)int32_temp_current_target=(KM.DirectSetpoint*PH_CURRENT_MAX)>>7;
