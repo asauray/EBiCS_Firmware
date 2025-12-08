@@ -149,6 +149,7 @@ volatile uint8_t ui8_SPEED_flag=0;
 volatile uint8_t ui8_SPEED_control_flag=0;
 volatile uint8_t ui8_BC_limit_flag=0;  //flag for Battery current limitation
 volatile uint8_t ui8_6step_flag=0;
+int16_t i16_60deg_Hall_flag=0;
 uint32_t uint32_PAS_counter= PAS_TIMEOUT+1;
 uint32_t uint32_PAS_HIGH_counter= 0;
 uint32_t uint32_PAS_HIGH_accumulated= 32000;
@@ -196,13 +197,20 @@ q31_t tic_array[6];
 
 //Rotor angle scaled from degree to q31 for arm_math. -180Â°-->-2^31, 0Â°-->0, +180Â°-->+2^31
 const q31_t deg_30 = 357913941;
-
+// angles for 120� setup
 q31_t Hall_13 = 0;
 q31_t Hall_32 = 0;
 q31_t Hall_26 = 0;
 q31_t Hall_64 = 0;
 q31_t Hall_51 = 0;
 q31_t Hall_45 = 0;
+// angles for 60� setup
+q31_t Hall_46 = 0;
+q31_t Hall_67 = 0;
+q31_t Hall_73 = 0;
+q31_t Hall_31 = 0;
+q31_t Hall_10 = 0;
+q31_t Hall_4 = 0;
 
 const q31_t tics_lower_limit = WHEEL_CIRCUMFERENCE*5*3600/(6*GEAR_RATIO*SPEEDLIMIT*10); //tics=wheelcirc*timerfrequency/(no. of hallevents per rev*gear-ratio*speedlimit)*3600/1000000
 const q31_t tics_higher_limit = WHEEL_CIRCUMFERENCE*5*3600/(6*GEAR_RATIO*(SPEEDLIMIT+2)*10);
@@ -215,7 +223,8 @@ uint16_t VirtAddVarTab[NB_OF_VAR] = { 	EEPROM_POS_HALL_ORDER,
 		EEPROM_POS_HALL_32,
 		EEPROM_POS_HALL_26,
 		EEPROM_POS_HALL_64,
-		EEPROM_INT_TEMP_V25
+		EEPROM_INT_TEMP_V25,
+		EEPROM_HALL_60
 };
 
 enum state {Stop, SixStep, Regen, Running, BatteryCurrentLimit, Interpolation, PLL, IdleRun};
@@ -278,7 +287,9 @@ void init_watchdog(void);
 void MX_IWDG_Init(void);
 void get_internal_temp_offset(void);
 void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);
-
+void Set_Hall_Logic(void);
+void Set_Hall_Angle60(void);
+void Set_Hall_Angle120(void);
 
 /* USER CODE BEGIN PFP */
 /* Private function prototypes -----------------------------------------------*/
@@ -615,6 +626,8 @@ int main(void)
 	}
 
 #else
+	EE_ReadVariable(EEPROM_HALL_60, &i16_60deg_Hall_flag);
+
 	i16_hall_order = HALL_ORDER;
 	ui32_KV = KV;
 	Hall_45 = HALL_45;
@@ -623,6 +636,14 @@ int main(void)
 	Hall_32 = HALL_32;
 	Hall_26 = HALL_26;
 	Hall_64 = HALL_64;
+
+	Hall_46 = HALL_60_46;
+	Hall_67 = HALL_60_67;
+	Hall_73 = HALL_60_73;
+	Hall_31 = HALL_60_31;
+	Hall_10 = HALL_60_10;
+	Hall_4 = HALL_60_4;
+
 #endif
 
 
@@ -812,7 +833,11 @@ int main(void)
 			//next priority: undervoltage protection
 			else if(MS.Voltage<VOLTAGE_MIN)int32_temp_current_target=0;
 			//next priority: push assist
-			else if(ui8_Push_Assist_flag)int32_temp_current_target=(MS.assist_level*PUSHASSIST_CURRENT)>>8; //does not work for BAFANG and Kunteng protocol actually
+#if (DISPLAY_TYPE == DISPLAY_TYPE_KUNTENG)
+			else if(ui8_Walk_Assist_flag){int32_temp_current_target=(PUSHASSIST_CURRENT);} //Now working for Kunteng protocol.
+#else
+			else if(ui8_Push_Assist_flag)int32_temp_current_target=(MS.assist_level*PUSHASSIST_CURRENT)>>8; //does not work for BAFANG
+#endif
 			// last priority normal ride conditiones
 			else {
 
@@ -1085,8 +1110,8 @@ if(KM.Rx.Briddle == KM_BRIDDLE_ON) {
 
 				sprintf_(buffer, "%d, %d, %d, %d, %d, %d, %d, %d, %d\r\n",
 						adcData[1],
-						ui16_throttle_offset,
-						ui16_timertics,
+						i16_60deg_Hall_flag,
+						ui8_hall_state,
 						uint32_PAS,
 						MS.Battery_Current,
 						int32_temp_current_target ,
@@ -1879,6 +1904,31 @@ if(KM.Rx.Briddle == KM_BRIDDLE_ON) {
 		if(MS.hall_angle_detect_flag){ //only process, if autodetect procedere is fininshed
 			ui8_hall_state_old=ui8_hall_state;
 		}
+#if (USE_FIX_POSITIONS)
+//Check for 60� hall configuration
+		if(ui8_hall_state==0)i16_60deg_Hall_flag |= 0b1;
+		if(ui8_hall_state==7)i16_60deg_Hall_flag |= 0b10;
+
+		if((i16_60deg_Hall_flag&0b111) == 0b11){
+			i16_60deg_Hall_flag = 0b111;
+
+			Set_Hall_Logic();
+
+		}
+//Check for 120� hall configuration
+		if(ui8_hall_state==2)i16_60deg_Hall_flag |= 0b1000;
+		if(ui8_hall_state==5)i16_60deg_Hall_flag |= 0b10000;
+		if(i16_60deg_Hall_flag>>3==0b11){
+			i16_60deg_Hall_flag=0b111000;
+			Set_Hall_Logic();
+
+		}
+
+		if(i16_60deg_Hall_flag>7)Set_Hall_Angle120();
+		else Set_Hall_Angle60();
+#else
+		Set_Hall_Angle120();
+#endif
 
 		uint32_tics_filtered-=uint32_tics_filtered>>3;
 		uint32_tics_filtered+=ui16_timertics;
@@ -1888,78 +1938,7 @@ if(KM.Rx.Briddle == KM_BRIDDLE_ON) {
 
 
 
-		switch (ui8_hall_case) //12 cases for each transition from one stage to the next. 6x forward, 6x reverse
-		{
-		//6 cases for forward direction
-		//6 cases for forward direction
-		case 64:
-			q31_rotorposition_hall = Hall_64;
 
-			i8_recent_rotor_direction = -i16_hall_order;
-			uint16_full_rotation_counter = 0;
-			break;
-		case 45:
-			q31_rotorposition_hall = Hall_45;
-
-			i8_recent_rotor_direction = -i16_hall_order;
-			break;
-		case 51:
-			q31_rotorposition_hall = Hall_51;
-
-			i8_recent_rotor_direction = -i16_hall_order;
-			break;
-		case 13:
-			q31_rotorposition_hall = Hall_13;
-
-			i8_recent_rotor_direction = -i16_hall_order;
-			uint16_half_rotation_counter = 0;
-			break;
-		case 32:
-			q31_rotorposition_hall = Hall_32;
-
-			i8_recent_rotor_direction = -i16_hall_order;
-			break;
-		case 26:
-			q31_rotorposition_hall = Hall_26;
-
-			i8_recent_rotor_direction = -i16_hall_order;
-			break;
-
-			//6 cases for reverse direction
-		case 46:
-			q31_rotorposition_hall = Hall_64;
-
-			i8_recent_rotor_direction = i16_hall_order;
-			break;
-		case 62:
-			q31_rotorposition_hall = Hall_26;
-
-			i8_recent_rotor_direction = i16_hall_order;
-			break;
-		case 23:
-			q31_rotorposition_hall = Hall_32;
-
-			i8_recent_rotor_direction = i16_hall_order;
-			uint16_half_rotation_counter = 0;
-			break;
-		case 31:
-			q31_rotorposition_hall = Hall_13;
-
-			i8_recent_rotor_direction = i16_hall_order;
-			break;
-		case 15:
-			q31_rotorposition_hall = Hall_51;
-
-			i8_recent_rotor_direction = i16_hall_order;
-			break;
-		case 54:
-			q31_rotorposition_hall = Hall_45;
-
-			i8_recent_rotor_direction = i16_hall_order;
-			uint16_full_rotation_counter = 0;
-			break;
-
-		} // end case
 
 		if(MS.angle_est){
 			q31_PLL_error=q31_rotorposition_PLL-q31_rotorposition_hall;
@@ -2361,9 +2340,9 @@ if(KM.Rx.Briddle == KM_BRIDDLE_ON) {
 			//printf_("%d, %d, %d, %d\n", temp3>>16,temp4>>16,temp5,temp6);
 
 			if (ui8_hall_state_old != ui8_hall_state) {
-				printf_("angle: %d, hallstate:  %d, hallcase %d \n",
+				printf_("angle: %d, hallstate:  %d, hallcase %d, q31_angle %u \n",
 						(int16_t) (((q31_rotorposition_absolute >> 23) * 180) >> 8),
-						ui8_hall_state, ui8_hall_case);
+						ui8_hall_state, ui8_hall_case,q31_rotorposition_absolute);
 
 				switch (ui8_hall_case) //12 cases for each transition from one stage to the next. 6x forward, 6x reverse
 				{
@@ -2584,6 +2563,169 @@ if(KM.Rx.Briddle == KM_BRIDDLE_ON) {
 		q31_d_dc=q31_p+q31_d_i;
 		return (q31_d_dc);
 	}
+
+void Set_Hall_Logic(void){
+	HAL_FLASH_Unlock();
+	EE_WriteVariable(EEPROM_HALL_60, i16_60deg_Hall_flag);
+	HAL_FLASH_Lock();
+	}
+
+void Set_Hall_Angle120(void){
+
+	switch (ui8_hall_case) //12 cases for each transition from one stage to the next. 6x forward, 6x reverse
+		{
+		//6 cases for forward direction
+		//6 cases for forward direction
+		case 64:
+			q31_rotorposition_hall = Hall_64;
+
+			i8_recent_rotor_direction = -i16_hall_order;
+			uint16_full_rotation_counter = 0;
+			break;
+		case 45:
+			q31_rotorposition_hall = Hall_45;
+
+			i8_recent_rotor_direction = -i16_hall_order;
+			break;
+		case 51:
+			q31_rotorposition_hall = Hall_51;
+
+			i8_recent_rotor_direction = -i16_hall_order;
+			break;
+		case 13:
+			q31_rotorposition_hall = Hall_13;
+
+			i8_recent_rotor_direction = -i16_hall_order;
+			uint16_half_rotation_counter = 0;
+			break;
+		case 32:
+			q31_rotorposition_hall = Hall_32;
+
+			i8_recent_rotor_direction = -i16_hall_order;
+			break;
+		case 26:
+			q31_rotorposition_hall = Hall_26;
+
+			i8_recent_rotor_direction = -i16_hall_order;
+			break;
+
+			//6 cases for reverse direction
+		case 46:
+			q31_rotorposition_hall = Hall_64;
+
+			i8_recent_rotor_direction = i16_hall_order;
+			break;
+		case 62:
+			q31_rotorposition_hall = Hall_26;
+
+			i8_recent_rotor_direction = i16_hall_order;
+			break;
+		case 23:
+			q31_rotorposition_hall = Hall_32;
+
+			i8_recent_rotor_direction = i16_hall_order;
+			uint16_half_rotation_counter = 0;
+			break;
+		case 31:
+			q31_rotorposition_hall = Hall_13;
+
+			i8_recent_rotor_direction = i16_hall_order;
+			break;
+		case 15:
+			q31_rotorposition_hall = Hall_51;
+
+			i8_recent_rotor_direction = i16_hall_order;
+			break;
+		case 54:
+			q31_rotorposition_hall = Hall_45;
+
+			i8_recent_rotor_direction = i16_hall_order;
+			uint16_full_rotation_counter = 0;
+			break;
+
+		} // end case
+
+	}
+
+void Set_Hall_Angle60(void){
+
+	switch (ui8_hall_case) //12 cases for each transition from one stage to the next. 6x forward, 6x reverse
+		{
+		//6 cases for forward direction
+		//6 cases for forward direction
+		case 10:
+			q31_rotorposition_hall = Hall_10;
+
+			i8_recent_rotor_direction = -i16_hall_order;
+			uint16_full_rotation_counter = 0;
+			break;
+		case 4:
+			q31_rotorposition_hall = Hall_4;
+
+			i8_recent_rotor_direction = -i16_hall_order;
+			break;
+		case 46:
+			q31_rotorposition_hall = Hall_46;
+
+			i8_recent_rotor_direction = -i16_hall_order;
+			break;
+		case 67:
+			q31_rotorposition_hall = Hall_67;
+
+			i8_recent_rotor_direction = -i16_hall_order;
+			uint16_half_rotation_counter = 0;
+			break;
+		case 73:
+			q31_rotorposition_hall = Hall_73;
+
+			i8_recent_rotor_direction = -i16_hall_order;
+			break;
+		case 31:
+			q31_rotorposition_hall = Hall_31;
+
+			i8_recent_rotor_direction = -i16_hall_order;
+			break;
+
+			//6 cases for reverse direction
+		case 01:
+			q31_rotorposition_hall = Hall_10;
+
+			i8_recent_rotor_direction = i16_hall_order;
+			break;
+		case 40:
+			q31_rotorposition_hall = Hall_4;
+
+			i8_recent_rotor_direction = i16_hall_order;
+			break;
+		case 64:
+			q31_rotorposition_hall = Hall_46;
+
+			i8_recent_rotor_direction = i16_hall_order;
+			uint16_half_rotation_counter = 0;
+			break;
+		case 76:
+			q31_rotorposition_hall = Hall_67;
+
+			i8_recent_rotor_direction = i16_hall_order;
+			break;
+		case 37:
+			q31_rotorposition_hall = Hall_73;
+
+			i8_recent_rotor_direction = i16_hall_order;
+			break;
+		case 13:
+			q31_rotorposition_hall = Hall_31;
+
+			i8_recent_rotor_direction = i16_hall_order;
+			uint16_full_rotation_counter = 0;
+			break;
+
+		} // end case
+
+	}
+
+
+
 
 #if (R_TEMP_PULLUP)
 	int16_t T_NTC(uint16_t ADC) // ADC 12 Bit, 10k Pullup, Rückgabewert in °C

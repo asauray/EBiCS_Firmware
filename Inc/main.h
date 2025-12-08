@@ -94,14 +94,30 @@
 #define INT_TEMP_25 0
 #define USE_FIX_POSITIONS 1
 //Put values from the startup message after autodetect here, if you want to use fix positions. 32bit values for the hall angles!
-#define KV 48
+/*
+ * i16_60deg_Hall_flag:
+ * bit 0: hallstate 0 detected
+ * bit 1: hallstate 7 detected
+ * bit 2: 60° hall configuration detected
+ * bit 3: hallstate 2 detected
+ * bit 4: hallstate 5 detected
+ * bit 5: 120° hall configuration detected
+ */
+#define KV 224
 #define HALL_ORDER -1
-#define HALL_45 310181888
-#define HALL_51 1133379584
-#define HALL_13 1825308672
-#define HALL_32 2481520640
-#define HALL_26 3292790784
-#define HALL_64 3972792320
+#define HALL_45 1837291766
+#define HALL_51 2565050131
+#define HALL_13 3245086636
+#define HALL_32 4032497326
+#define HALL_26 417566535
+#define HALL_64 1109533505
+
+#define HALL_60_46 -1729917165
+#define HALL_60_67 -978297870
+#define HALL_60_73 -238609040
+#define HALL_60_31 417566535
+#define HALL_60_10 1169185830
+#define HALL_60_4 1861152800
 
 #define CONTROLLER_TEMPERATURE_THRESHOLD 70
 #define CONTROLLER_TEMPERATURE_MAX       80
