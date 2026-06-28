@@ -148,6 +148,8 @@ volatile uint8_t ui8_PAS_flag=0;
 volatile uint8_t ui8_SPEED_flag=0;
 volatile uint8_t ui8_SPEED_control_flag=0;
 volatile uint8_t ui8_BC_limit_flag=0;  //flag for Battery current limitation
+uint8_t ui8_speed_limit_mode = SPEEDLIMIT_MODE_LEGAL; // 0 = legal (6 km/h), 1 = off-road (no limit)
+uint8_t ui8_speed_limit_initialized = 0;              // 1 after startup read from display
 volatile uint8_t ui8_6step_flag=0;
 int16_t i16_60deg_Hall_flag=0;
 uint32_t uint32_PAS_counter= PAS_TIMEOUT+1;
@@ -197,14 +199,14 @@ q31_t tic_array[6];
 
 //Rotor angle scaled from degree to q31 for arm_math. -180Ã‚Â°-->-2^31, 0Ã‚Â°-->0, +180Ã‚Â°-->+2^31
 const q31_t deg_30 = 357913941;
-// angles for 120° setup
+// angles for 120ï¿½ setup
 q31_t Hall_13 = 0;
 q31_t Hall_32 = 0;
 q31_t Hall_26 = 0;
 q31_t Hall_64 = 0;
 q31_t Hall_51 = 0;
 q31_t Hall_45 = 0;
-// angles for 60° setup
+// angles for 60ï¿½ setup
 q31_t Hall_46 = 0;
 q31_t Hall_67 = 0;
 q31_t Hall_73 = 0;
@@ -368,7 +370,7 @@ int main(void)
 
 	MP.pulses_per_revolution = PULSES_PER_REVOLUTION;
 	MP.wheel_cirumference = WHEEL_CIRCUMFERENCE;
-	MP.speedLimit=SPEEDLIMIT;
+	MP.speedLimit=BRIDLED_SPEEDLIMIT; // Legal mode default: 25 km/h when pedaling
 	MP.battery_current_max = BATTERYCURRENT_MAX;
 
 
@@ -970,19 +972,23 @@ int main(void)
 #endif //end throttle override
 
 			} //end else for normal riding
-			//ramp down setpoint at speed limit
-#ifdef LEGALFLAG
-			if(!brake_flag){ //only ramp down if no regen active
-				if(uint32_PAS_counter<PAS_TIMEOUT){
-					int32_temp_current_target=map(uint32_SPEEDx100_cumulated>>SPEEDFILTER, MP.speedLimit*100,(MP.speedLimit+2)*100,int32_temp_current_target,0);
+			// Speed limiting based on mode
+			if (!brake_flag) { // only limit if no regen active
+				if (ui8_speed_limit_mode == SPEEDLIMIT_MODE_LEGAL) {
+					if (uint32_PAS_counter < PAS_TIMEOUT) {
+						// PAS active: limit to 25 km/h (MP.speedLimit)
+						int32_temp_current_target = map(uint32_SPEEDx100_cumulated >> SPEEDFILTER,
+													MP.speedLimit*100, (MP.speedLimit+2)*100,
+												int32_temp_current_target, 0);
+					} else {
+						// Throttle only (no PAS): limit to ~6 km/h
+						int32_temp_current_target = map(uint32_SPEEDx100_cumulated >> SPEEDFILTER,
+													500, 700,
+												int32_temp_current_target, 0);
+					}
 				}
-				else{ //limit to 6km/h if pedals are not turning
-					int32_temp_current_target=map(uint32_SPEEDx100_cumulated>>SPEEDFILTER, 500,700,int32_temp_current_target,0);
-				}
+				// OFF-ROAD MODE: no speed limiting
 			}
-			//			else int32_temp_current_target=int32_temp_current_target;
-
-#endif //legalflag
 
 #if (DISPLAY_TYPE & DISPLAY_TYPE_KINGMETER || DISPLAY_TYPE & DISPLAY_TYPE_DEBUG)
 			if(KM.DirectSetpoint!=-1)int32_temp_current_target=(KM.DirectSetpoint*PH_CURRENT_MAX)>>7;
@@ -1146,6 +1152,60 @@ int main(void)
 				}
 
 #endif
+
+				// Speed limit mode toggle logic + headlight feedback
+				static uint8_t ui8_toggle_hold_counter = 0;
+				static uint8_t ui8_toggle_cooldown = 0;
+				static uint8_t ui8_prev_speed_limit_mode = 0xFF;
+				static uint8_t ui8_flash_counter = 0;
+				static uint8_t ui8_flash_state = 0;
+				static uint8_t ui8_flash_tick = 0;
+
+				// Headlight feedback on mode change
+				if (ui8_speed_limit_mode != ui8_prev_speed_limit_mode) {
+					ui8_flash_counter = (ui8_speed_limit_mode == SPEEDLIMIT_MODE_LEGAL) ? 1 : 2;
+					ui8_prev_speed_limit_mode = ui8_speed_limit_mode;
+				}
+
+				// Handle headlight flashing (~0.5 s on, ~0.5 s off)
+				if (ui8_flash_counter) {
+					ui8_flash_tick++;
+					if (ui8_flash_tick >= 8) {
+						ui8_flash_tick = 0;
+						ui8_flash_state = !ui8_flash_state;
+						HAL_GPIO_WritePin(LIGHT_GPIO_Port, LIGHT_Pin,
+										  ui8_flash_state ? GPIO_PIN_SET : GPIO_PIN_RESET);
+
+						if (!ui8_flash_state) {
+							ui8_flash_counter--;
+							if (!ui8_flash_counter) {
+								// Restore normal headlight state based on display setting
+								HAL_GPIO_WritePin(LIGHT_GPIO_Port, LIGHT_Pin,
+												  No2.Rx.Headlight ? GPIO_PIN_SET : GPIO_PIN_RESET);
+							}
+						}
+					}
+				}
+
+				if (ui8_toggle_cooldown) ui8_toggle_cooldown--;
+
+				// Brake + Throttle held together = toggle Legal <-> Off-road
+				if (brake_flag &&
+				    uint16_mapped_throttle > 100 &&
+				    ui8_toggle_cooldown == 0)
+				{
+					ui8_toggle_hold_counter++;
+					if (ui8_toggle_hold_counter >= TOGGLE_HOLD_TIME) {
+						ui8_speed_limit_mode = (ui8_speed_limit_mode == SPEEDLIMIT_MODE_LEGAL)
+										   ? SPEEDLIMIT_MODE_OFFROAD
+										   : SPEEDLIMIT_MODE_LEGAL;
+						ui8_toggle_hold_counter = 0;
+						ui8_toggle_cooldown = TOGGLE_COOLDOWN;
+					}
+				} else {
+					ui8_toggle_hold_counter = 0;
+				}
+
 				ui32_tim3_counter=0;
 			}// end of slow loop
 
@@ -1889,7 +1949,7 @@ int main(void)
 			ui8_hall_state_old=ui8_hall_state;
 		}
 #if (USE_FIX_POSITIONS)
-//Check for 60° hall configuration
+//Check for 60ï¿½ hall configuration
 		if(ui8_hall_state==0)i16_60deg_Hall_flag |= 0b1;
 		if(ui8_hall_state==7)i16_60deg_Hall_flag |= 0b10;
 
@@ -1899,7 +1959,7 @@ int main(void)
 			Set_Hall_Logic();
 
 		}
-//Check for 120° hall configuration
+//Check for 120ï¿½ hall configuration
 		if(ui8_hall_state==2)i16_60deg_Hall_flag |= 0b1000;
 		if(ui8_hall_state==5)i16_60deg_Hall_flag |= 0b10000;
 		if(i16_60deg_Hall_flag>>3==0b11){
@@ -2047,6 +2107,15 @@ int main(void)
 		/* Apply Rx parameters */
 
 		MS.assist_level = No2.Rx.AssistLevel;
+
+		if (!ui8_speed_limit_initialized) {
+			if (No2.Rx.SPEEDMAX_Limit == 24) {
+				ui8_speed_limit_mode = SPEEDLIMIT_MODE_OFFROAD;
+			} else {
+				ui8_speed_limit_mode = SPEEDLIMIT_MODE_LEGAL;
+			}
+			ui8_speed_limit_initialized = 1;
+		}
 
 		if(!No2.Rx.Headlight)
 		{
