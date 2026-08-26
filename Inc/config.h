@@ -47,11 +47,11 @@
 //Battery bar settings for Kunteng and Bafang Display
 
 //#define BATTERY_LEVEL_0 320000 //moved to display_kunteng.h
-#define BATTERY_LEVEL_1 323000
-#define BATTERY_LEVEL_2 329000
-#define BATTERY_LEVEL_3 344000
-#define BATTERY_LEVEL_4 368000
-#define BATTERY_LEVEL_5 380000
+#define BATTERY_LEVEL_1 300000
+#define BATTERY_LEVEL_2 330000
+#define BATTERY_LEVEL_3 360000
+#define BATTERY_LEVEL_4 390000
+#define BATTERY_LEVEL_5 420000
 
 //----------------------------------------------------------------------
 // PI-control factor settings
@@ -98,10 +98,10 @@
 //---------------------------------------------------------------------
 // power settings
 #define PH_CURRENT_MAX 1200
-#define BATTERYCURRENT_MAX 14000
+#define BATTERYCURRENT_MAX 7000
 #define REVERSE 1 // 1 for normal direction, -1 for reverse
 #define PUSHASSIST_CURRENT 300
-#define VOLTAGE_MIN 1320 // 33V
+#define VOLTAGE_MIN 1200 // 30V
 //---------------------------------------------------------------------
 // torquesensor settings
 #define TS_COEF 2400
