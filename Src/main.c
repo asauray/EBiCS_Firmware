@@ -1183,9 +1183,12 @@ int main(void)
 						if (!ui8_flash_state) {
 							ui8_flash_counter--;
 							if (!ui8_flash_counter) {
-								// Restore normal headlight state based on display setting
+#if (DISPLAY_TYPE == DISPLAY_TYPE_NO2)
 								HAL_GPIO_WritePin(LIGHT_GPIO_Port, LIGHT_Pin,
 												  No2.Rx.Headlight ? GPIO_PIN_SET : GPIO_PIN_RESET);
+#else
+								HAL_GPIO_WritePin(LIGHT_GPIO_Port, LIGHT_Pin, GPIO_PIN_RESET);
+#endif
 							}
 						}
 					}
