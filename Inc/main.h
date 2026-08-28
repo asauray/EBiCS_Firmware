@@ -93,7 +93,7 @@
 #define R_TEMP_PULLUP 0
 #define INT_TEMP_25 0
 #define TORQUE_OFFSET 850
-//#define USE_FIX_POSITIONS 1
+#define USE_FIX_POSITIONS 1
 //Put values from the startup message after autodetect here, if you want to use fix positions. 32bit values for the hall angles!
 /*
  * i16_60deg_Hall_flag:
@@ -104,14 +104,25 @@
  * bit 4: hallstate 5 detected
  * bit 5: 120° hall configuration detected
  */
-#define KV 48
+// emog values:
+// #define KV 48
+// #define HALL_ORDER -1
+// #define HALL_45 310181888
+// #define HALL_51 1133379584
+// #define HALL_13 1825308672
+// #define HALL_32 2481520640
+// #define HALL_26 3292790784
+// #define HALL_64 3972792320
+
+// kraken values:
+#define KV 15
 #define HALL_ORDER -1
-#define HALL_45 310181888
-#define HALL_51 1133379584
-#define HALL_13 1825308672
-#define HALL_32 2481520640
-#define HALL_26 3292790784
-#define HALL_64 3972792320
+#define HALL_45 453312512
+#define HALL_51 1193017344
+#define HALL_13 1896939520
+#define HALL_32 2541158400
+#define HALL_26 3304718336
+#define HALL_64 4044423168
 
 #define HALL_60_46 -1729917165
 #define HALL_60_67 -978297870
