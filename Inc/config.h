@@ -98,7 +98,7 @@
 //---------------------------------------------------------------------
 // power settings
 #define PH_CURRENT_MAX 1200
-#define BATTERYCURRENT_MAX 7000
+#define BATTERYCURRENT_MAX 20000
 #define REVERSE 1 // 1 for normal direction, -1 for reverse
 #define PUSHASSIST_CURRENT 300
 #define VOLTAGE_MIN 1200 // 30V
@@ -121,7 +121,7 @@
 // #define ADC_BRAKE
 
 //---------------------------------------------------------------------
-#define AUTODETECT 1
+#define AUTODETECT 0
 //#define FIELD_WEAKENING 0
 
 #endif /* CONFIG_H_ */
