@@ -121,5 +121,6 @@
 
 //---------------------------------------------------------------------
 #define AUTODETECT 1
+#define FIELD_WEAKENING 0
 
 #endif /* CONFIG_H_ */
