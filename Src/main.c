@@ -996,9 +996,11 @@ int main(void)
 #endif
 
 		// Self-test diagnostic override: apply fixed current target after all normal calculation
+#if (DISPLAY_TYPE == DISPLAY_TYPE_DEBUG)
 		if (ui8_self_test_active && MS.hall_angle_detect_flag) {
 			int32_temp_current_target = SELF_TEST_CURRENT;
 		}
+#endif
 
 			MS.i_q_setpoint=map(MS.Temperature, MOTOR_TEMPERATURE_THRESHOLD,MOTOR_TEMPERATURE_MAX,int32_temp_current_target,0); //ramp down power with temperature to avoid overheating the motor
 #if(INT_TEMP_25)
@@ -1075,7 +1077,8 @@ int main(void)
 #endif
 			}
 
-			// Self-test diagnostic counter management
+			// Self-test diagnostic counter management (only active in debug mode)
+#if (DISPLAY_TYPE == DISPLAY_TYPE_DEBUG)
 			if (ui8_self_test_active) {
 				if (ui16_self_test_counter < SELF_TEST_DURATION) {
 					ui16_self_test_counter++;
@@ -1092,6 +1095,7 @@ int main(void)
 					printf_("SELF TEST COMPLETE\n");
 				}
 			}
+#endif
 
 #ifdef INDIVIDUAL_MODES
 				// GET recent speedcase for assist profile
