@@ -105,13 +105,8 @@
 
 //---------------------------------------------------------------------
 // Display settings
-#define DISPLAY_TYPE DISPLAY_TYPE_DEBUG
-//#define DISPLAY_TYPE DISPLAY_TYPE_NO2
-
-//---------------------------------------------------------------------
-// Self-test diagnostic settings
-#define SELF_TEST_CURRENT 2000
-#define SELF_TEST_DURATION 160
+//#define DISPLAY_TYPE DISPLAY_TYPE_DEBUG
+#define DISPLAY_TYPE DISPLAY_TYPE_NO2
 
 //---------------------------------------------------------------------
 // Regen settings
