@@ -177,6 +177,9 @@ uint16_t uint16_mapped_PAS=0;
 uint16_t uint16_mapped_BRAKE=0;
 uint16_t uint16_half_rotation_counter=0;
 uint16_t uint16_full_rotation_counter=0;
+
+uint8_t ui8_self_test_active = 1;
+uint16_t ui16_self_test_counter = 0;
 int32_t int32_temp_current_target=0;
 q31_t q31_PLL_error=0;
 q31_t q31_t_Battery_Current_accumulated=0;
@@ -989,8 +992,14 @@ int main(void)
 #endif //legalflag
 
 #if (DISPLAY_TYPE & DISPLAY_TYPE_KINGMETER || DISPLAY_TYPE & DISPLAY_TYPE_DEBUG)
-			if(KM.DirectSetpoint!=-1)int32_temp_current_target=(KM.DirectSetpoint*PH_CURRENT_MAX)>>7;
+		if(KM.DirectSetpoint!=-1)int32_temp_current_target=(KM.DirectSetpoint*PH_CURRENT_MAX)>>7;
 #endif
+
+		// Self-test diagnostic override: apply fixed current target after all normal calculation
+		if (ui8_self_test_active && MS.hall_angle_detect_flag) {
+			int32_temp_current_target = SELF_TEST_CURRENT;
+		}
+
 			MS.i_q_setpoint=map(MS.Temperature, MOTOR_TEMPERATURE_THRESHOLD,MOTOR_TEMPERATURE_MAX,int32_temp_current_target,0); //ramp down power with temperature to avoid overheating the motor
 #if(INT_TEMP_25)
 			MS.i_q_setpoint=map(MS.int_Temperature, CONTROLLER_TEMPERATURE_THRESHOLD,CONTROLLER_TEMPERATURE_MAX,MS.i_q_setpoint,0); //ramp down power with processor temperatur to avoid overheating the controller
@@ -1058,13 +1067,31 @@ int main(void)
 				ui32_int_Temp_cumulated+=adcData[7];
 				MS.int_Temperature=(((i16_int_Temp_V25-(ui32_int_Temp_cumulated>>5))*24)>>7)+25;
 
-				MS.Voltage=adcData[0];
-				if(uint32_SPEED_counter>32000){
-					MS.Speed = 32000;
+			MS.Voltage=adcData[0];
+			if(uint32_SPEED_counter>32000){
+				MS.Speed = 32000;
 #if (SPEEDSOURCE == EXTERNAL)
-					uint32_SPEEDx100_cumulated=0;
+				uint32_SPEEDx100_cumulated=0;
 #endif
+			}
+
+			// Self-test diagnostic counter management
+			if (ui8_self_test_active) {
+				if (ui16_self_test_counter < SELF_TEST_DURATION) {
+					ui16_self_test_counter++;
+					if (ui16_self_test_counter == 1) {
+						printf_("SELF TEST START: %d mA for %d cycles (~10 sec)\n", SELF_TEST_CURRENT, SELF_TEST_DURATION);
+					}
+					// Safety aborts
+					if (brake_is_set() || SystemState == Stop) {
+						ui8_self_test_active = 0;
+						printf_("SELF TEST ABORTED: brake or stall\n");
+					}
+				} else {
+					ui8_self_test_active = 0;
+					printf_("SELF TEST COMPLETE\n");
 				}
+			}
 
 #ifdef INDIVIDUAL_MODES
 				// GET recent speedcase for assist profile
@@ -1096,16 +1123,16 @@ int main(void)
 #if (DISPLAY_TYPE == DISPLAY_TYPE_DEBUG && !defined(FAST_LOOP_LOG))
 				//print values for debugging
 
-				sprintf_(buffer, "%d, %d, %d, %d, %d, %d, %d, %d, %d\r\n",
-						adcData[1],
-						i16_60deg_Hall_flag,
-						ui8_hall_state,
-						uint32_PAS,
-						MS.Battery_Current,
-						int32_temp_current_target ,
+				sprintf_(buffer, "A:%d.%dA T:%d.%dA iq:%d u:%d S:%d PAS:%d h:%d\r\n",
+						(MS.Battery_Current < 0 ? -MS.Battery_Current : MS.Battery_Current) / 1000,
+						((MS.Battery_Current < 0 ? -MS.Battery_Current : MS.Battery_Current) % 1000) / 100,
+						(int32_temp_current_target < 0 ? -int32_temp_current_target : int32_temp_current_target) / 1000,
+						((int32_temp_current_target < 0 ? -int32_temp_current_target : int32_temp_current_target) % 1000) / 100,
 						MS.i_q,
 						MS.u_abs,
-						SystemState);
+						SystemState,
+						uint32_PAS,
+						ui8_hall_state);
 				// sprintf_(buffer, "%d, %d, %d, %d, %d, %d, %d\r\n",(uint16_t)adcData[0],(uint16_t)adcData[1],(uint16_t)adcData[2],(uint16_t)adcData[3],(uint16_t)(adcData[4]),(uint16_t)(adcData[5]),(uint16_t)(adcData[6])) ;
 				// sprintf_(buffer, "%d, %d, %d, %d, %d, %d\r\n",tic_array[0],tic_array[1],tic_array[2],tic_array[3],tic_array[4],tic_array[5]) ;
 				i=0;
