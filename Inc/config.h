@@ -80,8 +80,8 @@
 //--------------------------------------------------------------------
 // Speed settings
 //#define WHEEL_CIRCUMFERENCE 2200
-#define WHEEL_CIRCUMFERENCE 2320
-#define GEAR_RATIO 98 // 11 for BionX IGH3
+#define WHEEL_CIRCUMFERENCE 2450
+#define GEAR_RATIO 50 // 5:1 mechanical gear * 10 pole pairs for Bafang G060 hub motor
 #define SPEEDLIMIT 40
 #define BRIDLED_SPEEDLIMIT 25
 //#define PULSES_PER_REVOLUTION 1
