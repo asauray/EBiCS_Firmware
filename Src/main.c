@@ -151,8 +151,6 @@ volatile uint8_t ui8_PAS_flag=0;
 volatile uint8_t ui8_SPEED_flag=0;
 volatile uint8_t ui8_SPEED_control_flag=0;
 volatile uint8_t ui8_BC_limit_flag=0;  //flag for Battery current limitation
-uint8_t ui8_speed_limit_mode = SPEEDLIMIT_MODE_LEGAL; // 0 = legal (6 km/h), 1 = off-road (no limit)
-uint8_t ui8_speed_limit_initialized = 0;              // 1 after startup read from display
 volatile uint8_t ui8_6step_flag=0;
 int16_t i16_60deg_Hall_flag=0;
 uint32_t uint32_PAS_counter= PAS_TIMEOUT+1;
@@ -373,7 +371,7 @@ int main(void)
 
 	MP.pulses_per_revolution = PULSES_PER_REVOLUTION;
 	MP.wheel_cirumference = WHEEL_CIRCUMFERENCE;
-	MP.speedLimit=BRIDLED_SPEEDLIMIT; // Legal mode default: 25 km/h when pedaling
+	MP.speedLimit=SPEEDLIMIT;
 	MP.battery_current_max = BATTERYCURRENT_MAX;
 
 
@@ -976,23 +974,19 @@ int main(void)
 #endif //end throttle override
 
 			} //end else for normal riding
-			// Speed limiting based on mode
-			if (!brake_flag) { // only limit if no regen active
-				if (ui8_speed_limit_mode == SPEEDLIMIT_MODE_LEGAL) {
-					if (uint32_PAS_counter < PAS_TIMEOUT) {
-						// PAS active: limit to 25 km/h (MP.speedLimit)
-						int32_temp_current_target = map(uint32_SPEEDx100_cumulated >> SPEEDFILTER,
-													MP.speedLimit*100, (MP.speedLimit+2)*100,
-												int32_temp_current_target, 0);
-					} else {
-						// Throttle only (no PAS): limit to ~6 km/h
-						int32_temp_current_target = map(uint32_SPEEDx100_cumulated >> SPEEDFILTER,
-													500, 700,
-												int32_temp_current_target, 0);
-					}
+			//ramp down setpoint at speed limit
+#ifdef LEGALFLAG
+			if(!brake_flag){ //only ramp down if no regen active
+				if(uint32_PAS_counter<PAS_TIMEOUT){
+					int32_temp_current_target=map(uint32_SPEEDx100_cumulated>>SPEEDFILTER, MP.speedLimit*100,(MP.speedLimit+2)*100,int32_temp_current_target,0);
 				}
-				// OFF-ROAD MODE: no speed limiting
+				else{ //limit to 6km/h if pedals are not turning
+					int32_temp_current_target=map(uint32_SPEEDx100_cumulated>>SPEEDFILTER, 500,700,int32_temp_current_target,0);
+				}
 			}
+			//			else int32_temp_current_target=int32_temp_current_target;
+
+#endif //legalflag
 
 #if (DISPLAY_TYPE & DISPLAY_TYPE_KINGMETER || DISPLAY_TYPE & DISPLAY_TYPE_DEBUG)
 			if(KM.DirectSetpoint!=-1)int32_temp_current_target=(KM.DirectSetpoint*PH_CURRENT_MAX)>>7;
@@ -1157,61 +1151,6 @@ int main(void)
 
 #endif
 
-				// Speed limit mode toggle logic + headlight feedback
-				static uint8_t ui8_toggle_hold_counter = 0;
-				static uint8_t ui8_toggle_cooldown = 0;
-				static uint8_t ui8_prev_speed_limit_mode = 0xFF;
-				static uint8_t ui8_flash_counter = 0;
-				static uint8_t ui8_flash_state = 0;
-				static uint8_t ui8_flash_tick = 0;
-
-				// Headlight feedback on mode change
-				if (ui8_speed_limit_mode != ui8_prev_speed_limit_mode) {
-					ui8_flash_counter = (ui8_speed_limit_mode == SPEEDLIMIT_MODE_LEGAL) ? 1 : 2;
-					ui8_prev_speed_limit_mode = ui8_speed_limit_mode;
-				}
-
-				// Handle headlight flashing (~0.5 s on, ~0.5 s off)
-				if (ui8_flash_counter) {
-					ui8_flash_tick++;
-					if (ui8_flash_tick >= 8) {
-						ui8_flash_tick = 0;
-						ui8_flash_state = !ui8_flash_state;
-						HAL_GPIO_WritePin(LIGHT_GPIO_Port, LIGHT_Pin,
-										  ui8_flash_state ? GPIO_PIN_SET : GPIO_PIN_RESET);
-
-						if (!ui8_flash_state) {
-							ui8_flash_counter--;
-							if (!ui8_flash_counter) {
-#if (DISPLAY_TYPE == DISPLAY_TYPE_NO2)
-								HAL_GPIO_WritePin(LIGHT_GPIO_Port, LIGHT_Pin,
-												  No2.Rx.Headlight ? GPIO_PIN_SET : GPIO_PIN_RESET);
-#else
-								HAL_GPIO_WritePin(LIGHT_GPIO_Port, LIGHT_Pin, GPIO_PIN_RESET);
-#endif
-							}
-						}
-					}
-				}
-
-				if (ui8_toggle_cooldown) ui8_toggle_cooldown--;
-
-				// Brake + Throttle held together = toggle Legal <-> Off-road
-				if (brake_flag &&
-				    uint16_mapped_throttle > 100 &&
-				    ui8_toggle_cooldown == 0)
-				{
-					ui8_toggle_hold_counter++;
-					if (ui8_toggle_hold_counter >= TOGGLE_HOLD_TIME) {
-						ui8_speed_limit_mode = (ui8_speed_limit_mode == SPEEDLIMIT_MODE_LEGAL)
-										   ? SPEEDLIMIT_MODE_OFFROAD
-										   : SPEEDLIMIT_MODE_LEGAL;
-						ui8_toggle_hold_counter = 0;
-						ui8_toggle_cooldown = TOGGLE_COOLDOWN;
-					}
-				} else {
-					ui8_toggle_hold_counter = 0;
-				}
 
 				ui32_tim3_counter=0;
 			}// end of slow loop
@@ -2114,15 +2053,6 @@ int main(void)
 		/* Apply Rx parameters */
 
 		MS.assist_level = No2.Rx.AssistLevel;
-
-		if (!ui8_speed_limit_initialized) {
-			if (No2.Rx.SPEEDMAX_Limit == 24) {
-				ui8_speed_limit_mode = SPEEDLIMIT_MODE_OFFROAD;
-			} else {
-				ui8_speed_limit_mode = SPEEDLIMIT_MODE_LEGAL;
-			}
-			ui8_speed_limit_initialized = 1;
-		}
 
 		if(!No2.Rx.Headlight)
 		{

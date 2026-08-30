@@ -91,16 +91,9 @@
 #define SPDSHFT 0
 
 //---------------------------------------------------------------------
-// Speed limit mode settings
-#define SPEEDLIMIT_MODE_LEGAL    0  // 6 km/h limit
-#define SPEEDLIMIT_MODE_OFFROAD  1  // no limit
-#define TOGGLE_HOLD_TIME         8  // ~0.5 s at 16 Hz slow loop
-#define TOGGLE_COOLDOWN          32 // ~2 s debounce
-
-//---------------------------------------------------------------------
 // power settings
 #define PH_CURRENT_MAX 1200
-#define BATTERYCURRENT_MAX 14560
+#define BATTERYCURRENT_MAX 14500
 #define REVERSE 1 // 1 for normal direction, -1 for reverse
 #define PUSHASSIST_CURRENT 300
 #define VOLTAGE_MIN 1200 // 30V
