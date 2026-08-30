@@ -109,11 +109,6 @@
 #define DISPLAY_TYPE DISPLAY_TYPE_NO2
 
 //---------------------------------------------------------------------
-// Self-test diagnostic settings (only active in DISPLAY_TYPE_DEBUG)
-// #define SELF_TEST_CURRENT 2000
-// #define SELF_TEST_DURATION 160
-
-//---------------------------------------------------------------------
 // Regen settings
 
 #define REGEN_CURRENT 800
